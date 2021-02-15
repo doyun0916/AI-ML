@@ -14,7 +14,6 @@ class CpStockChart:
 
     # 차트 요청 - 기간 기준으로
     def RequestFromTo(self, code, fromDate, toDate, caller):
-        print(code, fromDate, toDate)
         # 연결 여부 체크
         bConnect = g_objCpStatus.IsConnect
         if (bConnect == 0):
@@ -33,7 +32,6 @@ class CpStockChart:
 
         rqStatus = self.objStockChart.GetDibStatus()
         rqRet = self.objStockChart.GetDibMsg1()
-        print("통신상태", rqStatus, rqRet)
         if rqStatus != 0:
             exit()
 
@@ -53,7 +51,6 @@ class CpStockChart:
             caller.closes.append(self.objStockChart.GetDataValue(4, i))
             caller.vols.append(self.objStockChart.GetDataValue(5, i))
 
-        print(len)
         return caller
 
     # 차트 요청 - 최근일 부터 개수 기준
@@ -95,8 +92,6 @@ class CpStockChart:
             caller.closes.append(self.objStockChart.GetDataValue(4, i))
             caller.vols.append(self.objStockChart.GetDataValue(5, i))
 
-        print(len)
-
         return
 
     # 차트 요청 - 분간, 틱 차트
@@ -118,7 +113,6 @@ class CpStockChart:
 
         rqStatus = self.objStockChart.GetDibStatus()
         rqRet = self.objStockChart.GetDibMsg1()
-        print("통신상태", rqStatus, rqRet)
         if rqStatus != 0:
             exit()
 
@@ -144,6 +138,55 @@ class CpStockChart:
 
         return caller
 
+class Cp7210:
+    def __init__(self):
+        self.objRq = None
+        return
+
+    def request(self, investFlag, caller):
+        maxRqCont = 1
+        rqCnt = 0
+        caller.data7210 = []
+        self.objRq = None
+        self.objRq = win32com.client.Dispatch("CpSysDib.CpSvr7210d")
+
+        self.objRq.SetInputValue(0, '0')  # 0 전체 1 거래소 2 코스닥 3 업종 4 관심종목
+        self.objRq.SetInputValue(1, ord('0'))  # 0 수량 1 금액
+        self.objRq.SetInputValue(2, investFlag)  # 0 종목 1 외국인 2 기관계 3 보험기타 4 투신..
+        self.objRq.SetInputValue(3, ord('0'))  # 0 상위순 1 하위순
+
+        self.objRq.BlockRequest()
+        rqCnt += 1
+
+        # 통신 및 통신 에러 처리
+        rqStatus = self.objRq.GetDibStatus()
+        rqRet = self.objRq.GetDibMsg1()
+        if rqStatus != 0:
+            return False
+
+        cnt = self.objRq.GetHeaderValue(0)
+        date = self.objRq.GetHeaderValue(1)  # 집계날짜
+        time = self.objRq.GetHeaderValue(2)  # 집계시간
+
+        for i in range(cnt):
+            item = {}
+            item['code'] = self.objRq.GetDataValue(0, i)
+            item['종목명'] = self.objRq.GetDataValue(1, i)
+            item['현재가'] = self.objRq.GetDataValue(2, i)
+            item['대비'] = self.objRq.GetDataValue(3, i)
+            item['대비율'] = self.objRq.GetDataValue(4, i)
+            item['거래량'] = self.objRq.GetDataValue(5, i)
+            item['외국인'] = self.objRq.GetDataValue(6, i)
+            item['기관계'] = self.objRq.GetDataValue(7, i)
+            item['보험기타금융'] = self.objRq.GetDataValue(8, i)
+            item['투신'] = self.objRq.GetDataValue(9, i)
+            item['은행'] = self.objRq.GetDataValue(10, i)
+            item['연기금'] = self.objRq.GetDataValue(11, i)
+            item['국가지자체'] = self.objRq.GetDataValue(12, i)
+            item['기타법인'] = self.objRq.GetDataValue(13, i)
+            caller.data7210.append(item)
+
+        return caller
 
 if __name__ == "__main__":
     class Result:
@@ -156,11 +199,26 @@ if __name__ == "__main__":
             self.closes = []
             self.vols = []
             self.times = []
+
+    class temp:
+        def __init__(self):
+            self.data7210 = []
+
     new = CpStockChart()
     final = Result
-    code = input()
+    code = input("코드명: ")
     begins = new.RequestFromTo(code, 20161212, 20210214, final)
     iter = len(begins.dates)
     print("코드: ", code)
     for i in range(iter):
         print("날짜: ", begins.dates[i], "시가: ", begins.opens[i], "고가: ", begins.highs[i], "저가: ", begins.lows[i], "종가: ", begins.closes[i], "거래량: ", begins.vols[i],)
+
+    print("")
+    print("************ 외국인, 기관계 등등 지표 ****************")
+
+    come_on = temp
+    others_new = Cp7210()
+    fin = others_new.request(1, come_on)
+    for i in range(len(fin.data7210)):
+        if fin.data7210[i]["code"] == code:
+            print(fin.data7210[i])
